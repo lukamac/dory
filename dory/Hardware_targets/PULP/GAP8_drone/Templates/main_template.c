@@ -55,10 +55,6 @@ n_inputs = DORY_HW_graph[0].n_test_inputs
 // #define REGRESSION_AS_CLASSIFICATION 1
 // #define IMAV 1
 
-// Defines
-#define FREQ_FC 200
-#define FREQ_CL 175
-
 // Camera
 #ifdef IMAV
 #define CAMERA_WIDTH 162
