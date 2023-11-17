@@ -34,15 +34,6 @@ l3_supported = DORY_HW_graph[0].HW_description['memory']['levels'] > 2
 #include "${layer}"
 % endfor
 
-% if sdk == 'pulp-sdk':
-#define ICACHE_CTRL_UNIT 0x10201400
-#define ICACHE_PREFETCH ICACHE_CTRL_UNIT + 0x1C
-% endif
-
-% if verbose:
-#define VERBOSE 1
-% endif
-
 % if l3_supported:
 #define L3_WEIGHTS_SIZE 4000000
 #define L3_INPUT_SIZE 1500000
@@ -51,10 +42,7 @@ l3_supported = DORY_HW_graph[0].HW_description['memory']['levels'] > 2
 static void *L3_weights = NULL;
 static void *L3_input = NULL;
 static void *L3_output = NULL;
-% if 'Yes' in performance or 'Perf_final' in verbose_level:
-int ${prefix}cycle_network_execution;
 
-% endif
 /* Moves the weights and the biases from hyperflash to hyperram */
 void ${prefix}network_initialize(${prefix}network_t * network) {
   % if l3_supported:
@@ -66,7 +54,7 @@ void ${prefix}network_initialize(${prefix}network_t * network) {
   printf("\nL3 Buffer alloc initial\t@ %d:\t%s\n", (unsigned int)L3_weights, L3_weights?"Ok":"Failed");
   printf("\nL3 Buffer alloc initial\t@ %d:\t%s\n", (unsigned int)L3_input, L3_input?"Ok":"Failed");
   printf("\nL3 Buffer alloc initial\t@ %d:\t%s\n", (unsigned int)L3_output, L3_output?"Ok":"Failed");
-#endif
+#endif // VERBOSE
 
   void *w_ptr = L3_weights;
   for (int i = 0; i < ${weights_number}; i++) {
@@ -139,9 +127,9 @@ void ${prefix}network_run_async(${prefix}network_t * network, ${prefix}network_a
 
 void ${prefix}network_run_wait(${prefix}network_t * network) {
   pi_task_block(&network->cluster_task);
-  % if 'Perf_final' in verbose_level:
+#ifdef PERF_FINAL
   print_perf("Final", ${prefix}cycle_network_execution, ${MACs});
-  % endif
+#endif
 }
 
 void ${prefix}network_run(${prefix}network_t * network, ${prefix}network_args_t * args) {
@@ -199,10 +187,10 @@ void ${prefix}network_run_cluster(void * args) {
 /* ---------------------------------- */
 /* --------- SECTION 1 END ---------- */
 /* ---------------------------------- */
-  % if 'Yes' in performance or 'Perf_final' in verbose_level:
+#if defined PERF_LAYER || PERF_FINAL
   // perf measurement begin
-  ${prefix}cycle_network_execution = 0;
-  % endif
+  int ${prefix}cycle_network_execution = 0;
+#endif
 /* MAIN SECTION
   - for loop over all the layers of the network
   - double buffering using L3
@@ -233,28 +221,29 @@ void ${prefix}network_run_cluster(void * args) {
     L2_weights = Weights_name[i];
     % endif
 
-% if 'Check_all' in verbose_level:
-#ifdef VERBOSE
+#ifdef CHECKSUM
     % if l3_supported:
-    if (L3_input_layers[i] == 1)
+    if (L3_input_layers[i] == 1) {
       printf("Input in L3\n");
-    else
+    } else
     % endif
     if (i == 0 || branch_change[i-1] == 0) {
       checksum("L2 input", L2_input, activations_size[i], activations_checksum[i][exec]);
-      % if l3_supported:
-      if (allocate_layer[i] == 1)
-      % else:
-      if (layer_with_weights[i])
-      % endif
-        checksum("L2 weights", L2_weights, weights_size[i], weights_checksum[i]);
-      else
-        printf("Weights in L3\n");
-    }
-    else
+    } else {
       printf("Switching branch, already checked activation\n");
-#endif
-% endif
+    }
+#endif // CHECKSUM_ACTIVATIONS
+#if defined CHECKSUM || CHECKSUM_JUST_WEIGHTS
+    % if l3_supported:
+    if (allocate_layer[i] == 1) {
+    % else:
+    if (layer_with_weights[i]) {
+    % endif
+      checksum("L2 weights", L2_weights, weights_size[i], weights_checksum[i]);
+    } else {
+      printf("Weights in L3\n");
+    }
+#endif // CHECKSUM_WEIGHTS
 
     layer_args_t largs = {
       .L3_input = (unsigned int) L3_input,
@@ -274,24 +263,26 @@ void ${prefix}network_run_cluster(void * args) {
 /*
 - Execution of the layers_pointers
 */
-    % if 'Yes' in performance or 'Perf_final' in verbose_level:
+#if defined PERF_LAYER || defined PERF_FINAL
     // perf measurement begin
     pi_perf_conf(1<<PI_PERF_CYCLES);
     pi_perf_reset();
     pi_perf_stop();
     pi_perf_start();
-    % endif
+#endif
+
     ${prefix}execute_layer_fork((void *) &largs);
-    % if 'Yes' in performance or 'Perf_final' in verbose_level:
+
+#if defined PERF_LAYER || defined PERF_FINAL
     // performance measurements: end
     pi_perf_stop();
     perf_cyc =  pi_perf_read(PI_PERF_CYCLES);
     ${prefix}cycle_network_execution += perf_cyc;
-    % endif
+#endif
 
-    % if 'Yes' in performance:
+#ifdef PERF_LAYER
     print_perf(Layers_name[i], perf_cyc, NODEs_MACS[i]);
-    % endif
+#endif
 
     // TODO: What error?
     // prevents error from compiler
@@ -304,7 +295,9 @@ void ${prefix}network_run_cluster(void * args) {
 
 #ifdef VERBOSE
     printf("Layer %s %d ended: \n", Layers_name[i], i);
-    % if 'Check_all' in verbose_level:
+#endif // VERBOSE
+
+#ifdef CHECKSUM
     % if l3_supported:
     if (L3_output_layers[i]==1) {
       printf("Output in L3. Expected checksum: %d\n", activations_out_checksum[i][exec]);
@@ -315,12 +308,7 @@ void ${prefix}network_run_cluster(void * args) {
     % if l3_supported:
     }
     % endif
-    printf("\n");
-    % elif 'Last' in verbose_level:
-    if (i == ${len(DORY_HW_graph) - 1})
-        checksum("final layer", L2_output, activations_out_size[i], activations_out_checksum[i][exec]);
-    % endif
-#endif
+#endif // CHECKSUM
 
     // Free memory
     % if l3_supported:
@@ -413,6 +401,10 @@ void ${prefix}network_run_cluster(void * args) {
     % endif
     dir = !dir;
   }
+
+#ifdef CHECKSUM
+  checksum("final layer", L2_output, activations_out_size[i], activations_out_checksum[i][exec]);
+#endif
 
   //memcpy(L2_output, l2_final_output, activations_out_size[${len(DORY_HW_graph)-1}]); // BUGGY!
   for (int i=0; i<activations_out_size[${len(DORY_HW_graph)-1}]; i++)

@@ -30,10 +30,6 @@ single_input = n_inputs==1
 
 #include "pmsis.h"
 
-% if verbose:
-#define VERBOSE 1
-% endif
-
 % if sdk == 'pulp-sdk':
 unsigned int PMU_set_voltage(unsigned int Voltage, unsigned int CheckFrequencies) {
   return 0;
