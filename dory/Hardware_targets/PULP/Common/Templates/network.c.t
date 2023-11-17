@@ -127,9 +127,6 @@ void ${prefix}network_run_async(${prefix}network_t * network, ${prefix}network_a
 
 void ${prefix}network_run_wait(${prefix}network_t * network) {
   pi_task_block(&network->cluster_task);
-#ifdef PERF_FINAL
-  print_perf("Final", ${prefix}cycle_network_execution, ${MACs});
-#endif
 }
 
 void ${prefix}network_run(${prefix}network_t * network, ${prefix}network_args_t * args) {
@@ -402,13 +399,17 @@ void ${prefix}network_run_cluster(void * args) {
     dir = !dir;
   }
 
-#ifdef CHECKSUM
-  checksum("final layer", L2_output, activations_out_size[i], activations_out_checksum[i][exec]);
-#endif
-
   //memcpy(L2_output, l2_final_output, activations_out_size[${len(DORY_HW_graph)-1}]); // BUGGY!
   for (int i=0; i<activations_out_size[${len(DORY_HW_graph)-1}]; i++)
     *((uint8_t*)(l2_final_output+i)) = *((uint8_t*)(L2_output+i));
+
+#ifdef CHECKSUM
+  checksum("final layer", L2_output, activations_out_size[${len(DORY_HW_graph)-1}], activations_out_checksum[${len(DORY_HW_graph)-1}][exec]);
+#endif
+
+#ifdef PERF_FINAL
+  print_perf("Final", ${prefix}cycle_network_execution, ${MACs});
+#endif
 
 /* ---------------------------------- */
 /* --------- SECTION 2 END ---------- */
