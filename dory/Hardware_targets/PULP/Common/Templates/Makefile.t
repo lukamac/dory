@@ -24,6 +24,7 @@ APP_SRCS := $(wildcard src/*.c)
 # by not inlining of small functions in the management code
 APP_CFLAGS += -DNUM_CORES=$(CORE) -Iinc -O2 -fno-indirect-inlining -flto -w
 APP_LDFLAGS += -lm -Wl,--print-memory-usage -flto
+APP_LDFLAGS += -lgaptools -lgaplib
 
 GAP9_DEFAULT_FLASH_TYPE = DEFAULT_FLASH
 GAP9_DEFAULT_RAM_TYPE = DEFAULT_RAM
