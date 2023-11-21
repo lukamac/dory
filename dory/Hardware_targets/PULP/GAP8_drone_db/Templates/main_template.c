@@ -283,8 +283,17 @@ void application(void * args) {
   ${prefix}network_t network;
   ${prefix}network_initialize(&network);
 
-  // Allocating space for input
-  void *l2_buffer = pmsis_l2_malloc(${l2_buffer_size});
+  // Allocating space the network and inputs
+<%
+l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_memory"])
+%>\
+  const size_t network_l2_buffer_size = ${l2_buffer_size};
+  const size_t network_l2_input_size = ${l2_input_size};
+  // Total size is network (which contains already space for 1 input) + one more input
+  // for double buffering.
+  const size_t total_l2_size = network_l2_buffer_size + network_l2_input_size;
+
+  void *l2_buffer = pmsis_l2_malloc(total_l2_size);
   if (NULL == l2_buffer) {
 #ifdef VERBOSE
     printf("ERROR: L2 buffer allocation failed.");
@@ -295,16 +304,10 @@ void application(void * args) {
   printf("\nL2 Buffer alloc initial\t@ 0x%08x:\tOk\n", (unsigned int)l2_buffer);
 #endif
 
-<%
-l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_memory"])
-%>
-
-  size_t l2_input_size = ${l2_input_size};
-
   /* Double buffer */
   const int N_IMAGE_BUFFERS = 2;
-  const void *input_addr[2] = { l2_buffer, l2_buffer + ${l2_buffer_size - l2_input_size} };
-  const void *network_start_addr[2] = { l2_buffer, l2_buffer + ${l2_input_size} };
+  const void *input_addr[2] = { l2_buffer, l2_buffer + network_l2_buffer_size };
+  const void *network_start_addr[2] = { l2_buffer, l2_buffer + network_l2_input_size };
   int buffer_idx = 0;
 
 #ifdef LOAD_CHECKSUM_INPUT
@@ -343,6 +346,22 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 #endif
 
 // ==========================================================================
+// =======================   First camera fetch   ===========================
+// ==========================================================================
+
+//    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+//    pi_camera_capture(&camera, input_addr[buffer_idx], BUFF_SIZE);
+//    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
+//
+//#ifdef JPEG_STREAMER
+//    frame_streamer_send(streamer, &buffer_streamer[buffer_idx]);
+//#endif
+
+#ifdef LOAD_CHECKSUM_INPUT
+    ram_read(input_addr[buffer_idx], ram_input, network_l2_input_size);
+#endif
+
+// ==========================================================================
 // ==============================   Loop   ==================================
 // ==========================================================================
 
@@ -353,21 +372,9 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 
     LED_TOGGLE;
 
-    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
-    pi_camera_capture(&camera, input_addr[buffer_idx], BUFF_SIZE);
-    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
-
-#ifdef JPEG_STREAMER
-    frame_streamer_send(streamer, &buffer_streamer[buffer_idx]);
-#endif
-
-#ifdef LOAD_CHECKSUM_INPUT
-    ram_read(input_addr[buffer_idx], ram_input, l2_input_size);
-#endif
-
     ${prefix}network_args_t network_args = {
       .l2_buffer = network_start_addr[buffer_idx],
-      .l2_buffer_size = ${l2_buffer_size - l2_input_size},
+      .l2_buffer_size = network_l2_buffer_size,
       .l2_final_output = data_to_send,
       .exec = 0,
       .initial_allocator_dir = !buffer_idx, // opposite of buffer_idx
@@ -376,7 +383,23 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
       % endif
     };
 
-    ${prefix}network_run(&network, &network_args);
+    ${prefix}network_run_async(&network, &network_args);
+
+    // Next image fetch
+
+//    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+//    pi_camera_capture(&camera, input_addr[!buffer_idx], BUFF_SIZE);
+//    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
+//
+//#ifdef JPEG_STREAMER
+//    frame_streamer_send(streamer, &buffer_streamer[!buffer_idx]);
+//#endif
+
+#ifdef LOAD_CHECKSUM_INPUT
+    ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
+#endif
+
+    ${prefix}network_run_wait(&network);
 
     // Print CNN outputs: Steering and collision
 #ifdef DEBUG
@@ -398,6 +421,7 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
     // pi_uart_write(&uart, (char *) data_to_send, CNN_OUTPUTS*4);
 
     /* UART asynchronous send */
+    pi_task_block(&task_uart);
     pi_uart_write_async(&uart, (char *)data_to_send, CNN_OUTPUTS * 4,
                         &task_uart);
     // pi_task_wait_on(&task_uart);
@@ -412,7 +436,7 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
   ram_free(ram_input, input_size);
 #endif
   ${prefix}network_terminate(&network);
-  pmsis_l2_malloc_free(l2_buffer, ${l2_buffer_size});
+  pmsis_l2_malloc_free(l2_buffer, total_l2_size);
 }
 
 int main () {
