@@ -34,6 +34,7 @@
 typedef struct ${prefix}network_t {
   struct pi_device cluster_dev;
   struct pi_cluster_task cluster_task;
+  pi_task_t task;
 } ${prefix}network_t;
 
 

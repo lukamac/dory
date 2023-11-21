@@ -121,12 +121,13 @@ void ${prefix}execute_layer_fork(void *args) {
 }
 
 void ${prefix}network_run_async(${prefix}network_t * network, ${prefix}network_args_t * args) {
+  pi_task_block(&network->task);
   pi_cluster_task(&network->cluster_task, ${prefix}network_run_cluster, args);
-  pi_cluster_send_task_to_cl(&network->cluster_dev, &network->cluster_task);
+  pi_cluster_send_task_to_cl_async(&network->cluster_dev, &network->cluster_task, &network->task);
 }
 
 void ${prefix}network_run_wait(${prefix}network_t * network) {
-  pi_task_block(&network->cluster_task);
+  pi_task_wait_on(&network->task);
 }
 
 void ${prefix}network_run(${prefix}network_t * network, ${prefix}network_args_t * args) {
