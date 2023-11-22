@@ -62,8 +62,8 @@ n_inputs = DORY_HW_graph[0].n_test_inputs
 // #define LOAD_CHECKSUM_INPUT 1
 
 // Defines
-#define FREQ_FC 200
-#define FREQ_CL 100
+#define FREQ_FC 250
+#define FREQ_CL 175
 
 // Camera
 #define CAMERA_WIDTH 162

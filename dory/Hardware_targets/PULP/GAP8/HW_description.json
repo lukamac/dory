@@ -34,7 +34,7 @@
 		"float32": null
 	},
 	"soc voltage": 1.2,
-	"core frequency": 200000000,
+	"core frequency": 250000000,
 	"accelerator frequency": 175000000,
 	"HW specific parameters":{
 		"accelerator core0 stack": 4096,
