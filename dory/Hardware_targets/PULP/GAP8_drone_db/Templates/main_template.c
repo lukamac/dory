@@ -307,6 +307,23 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 
   /* Double buffer */
   const int N_IMAGE_BUFFERS = 2;
+
+  /*             MEMORY LAYOUT
+   *
+   *          +-----------------+  <-- input_addr[0], network_start_addr[0]
+   *          |    input #0     |
+   *          +-----------------+  <-- network_start_addr[1]
+   *          |                 |
+   *          |                 |
+   *       |  |     Shared      | ^
+   * dir 1 |  |   Network Mem.  | | dir 0
+   *       V  |                 | |
+   *          |                 |
+   *          +-----------------+  <-- input_addr[1]
+   *          |    input #1     |
+   *          +-----------------+
+   */
+
   const void *input_addr[2] = { l2_buffer, l2_buffer + network_l2_buffer_size };
   const void *network_start_addr[2] = { l2_buffer, l2_buffer + network_l2_input_size };
   int buffer_idx = 0;
