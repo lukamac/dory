@@ -349,13 +349,9 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 // =======================   First camera fetch   ===========================
 // ==========================================================================
 
-//    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
-//    pi_camera_capture(&camera, input_addr[buffer_idx], BUFF_SIZE);
-//    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
-//
-//#ifdef JPEG_STREAMER
-//    frame_streamer_send(streamer, &buffer_streamer[buffer_idx]);
-//#endif
+    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+    pi_camera_capture(&camera, input_addr[buffer_idx], BUFF_SIZE);
+    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
 
 #ifdef LOAD_CHECKSUM_INPUT
     ram_read(input_addr[buffer_idx], ram_input, network_l2_input_size);
@@ -372,6 +368,17 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 
     LED_TOGGLE;
 
+    // Next image fetch
+
+    pi_task_t camera_task;
+    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+    pi_camera_capture_async(&camera, input_addr[!buffer_idx], BUFF_SIZE, pi_task_block(&camera_task));
+
+#ifdef LOAD_CHECKSUM_INPUT
+    // TODO: Make it async too
+    ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
+#endif
+
     ${prefix}network_args_t network_args = {
       .l2_buffer = network_start_addr[buffer_idx],
       .l2_buffer_size = network_l2_buffer_size,
@@ -384,21 +391,6 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
     };
 
     ${prefix}network_run_async(&network, &network_args);
-
-    // Next image fetch
-
-//    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
-//    pi_camera_capture(&camera, input_addr[!buffer_idx], BUFF_SIZE);
-//    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
-//
-//#ifdef JPEG_STREAMER
-//    frame_streamer_send(streamer, &buffer_streamer[!buffer_idx]);
-//#endif
-
-#ifdef LOAD_CHECKSUM_INPUT
-    ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
-#endif
-
     ${prefix}network_run_wait(&network);
 
     // Print CNN outputs: Steering and collision
@@ -421,10 +413,18 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
     // pi_uart_write(&uart, (char *) data_to_send, CNN_OUTPUTS*4);
 
     /* UART asynchronous send */
-    pi_task_block(&task_uart);
     pi_uart_write_async(&uart, (char *)data_to_send, CNN_OUTPUTS * 4,
-                        &task_uart);
+                        pi_task_block(&task_uart));
     // pi_task_wait_on(&task_uart);
+
+    // Wait for image
+
+    pi_task_wait_on(&camera_task);
+    pi_camera_control(&camera, PI_CAMERA_CMD_STOP, 0);
+
+#ifdef JPEG_STREAMER
+    frame_streamer_send(streamer, &buffer_streamer[buffer_idx]);
+#endif
 
     // Update buffer
     buffer_idx = !buffer_idx;
