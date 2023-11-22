@@ -374,11 +374,6 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
     pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
     pi_camera_capture_async(&camera, input_addr[!buffer_idx], BUFF_SIZE, pi_task_block(&camera_task));
 
-#ifdef LOAD_CHECKSUM_INPUT
-    // TODO: Make it async too
-    ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
-#endif
-
     ${prefix}network_args_t network_args = {
       .l2_buffer = network_start_addr[buffer_idx],
       .l2_buffer_size = network_l2_buffer_size,
@@ -424,6 +419,10 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 
 #ifdef JPEG_STREAMER
     frame_streamer_send(streamer, &buffer_streamer[buffer_idx]);
+#endif
+
+#ifdef LOAD_CHECKSUM_INPUT
+    ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
 #endif
 
     // Update buffer
