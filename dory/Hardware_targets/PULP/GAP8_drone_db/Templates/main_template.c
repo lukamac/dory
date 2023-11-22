@@ -60,6 +60,7 @@ n_inputs = DORY_HW_graph[0].n_test_inputs
 
 /* OTHER DEBUG FLAGS */
 // #define LOAD_CHECKSUM_INPUT 1
+// #define DISABLE_DB
 
 // Defines
 #define FREQ_FC 250
@@ -370,9 +371,11 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 
     // Next image fetch
 
+#ifndef DISABLE_DB  // if *not* defined
     pi_task_t camera_task;
     pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
     pi_camera_capture_async(&camera, input_addr[!buffer_idx], BUFF_SIZE, pi_task_block(&camera_task));
+#endif
 
     ${prefix}network_args_t network_args = {
       .l2_buffer = network_start_addr[buffer_idx],
@@ -412,6 +415,12 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
                         pi_task_block(&task_uart));
     // pi_task_wait_on(&task_uart);
 
+#ifdef DISABLE_DB  // if defined
+    pi_task_t camera_task;
+    pi_camera_control(&camera, PI_CAMERA_CMD_START, 0);
+    pi_camera_capture_async(&camera, input_addr[buffer_idx], BUFF_SIZE, pi_task_block(&camera_task));
+#endif
+
     // Wait for image
 
     pi_task_wait_on(&camera_task);
@@ -422,11 +431,19 @@ l2_input_size = int(DORY_HW_graph[0].tiling_dimensions["L2"]["input_activation_m
 #endif
 
 #ifdef LOAD_CHECKSUM_INPUT
+#ifdef DISABLE_DB
+    // store into buffer_idx
+    ram_read(input_addr[buffer_idx], ram_input, network_l2_input_size);
+#else
+    // store into next buffer_idx, i.e. !buffer_idx
     ram_read(input_addr[!buffer_idx], ram_input, network_l2_input_size);
+#endif
 #endif
 
     // Update buffer
+#ifndef DISABLE_DB // if *not* defined
     buffer_idx = !buffer_idx;
+#endif
 
     end_perf_counter(true);
   }
