@@ -27,13 +27,15 @@
 		"8bits": 32,
 		"float32": null
 	},
-	"core frequency": 100000000,
-	"accelerator frequency": 100000000,
+	"soc voltage": 1.2,
+	"core frequency": 250000000,
+	"accelerator frequency": 175000000,
 	"HW specific parameters":{
-		"accelerator core0 stack": 3500,
-		"accelerator core1-7 stack": 3400		
+		"accelerator core0 stack": 4096,
+		"accelerator core1-7 stack": 3072
 	},
-    "split_ints": true,
-    "double_buffering": 1,
-    "mchan_check_end_policy": "polled"
+	"double_buffering": 1,
+	"split_ints": true,
+	"blocking_dma_transfers": true,
+	"mchan_check_end_policy": "polled"
 }
