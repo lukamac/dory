@@ -165,7 +165,7 @@ void ${prefix}network_run_cluster(void * args) {
   int z = 0;
   int end_left = 0;
   % endif
-  int perf_cyc = 0;
+
 /* ---------------------------------- */
 /* --------- SECTION 0 END ---------- */
 /* ---------------------------------- */
@@ -185,10 +185,15 @@ void ${prefix}network_run_cluster(void * args) {
 /* ---------------------------------- */
 /* --------- SECTION 1 END ---------- */
 /* ---------------------------------- */
+
 #if defined PERF_LAYER || PERF_FINAL
-  // perf measurement begin
-  int ${prefix}cycle_network_execution = 0;
+  pi_perf_conf(1<<PI_PERF_CYCLES);
+  int perf_cyc = 0;
+  int io_cyc = 0;
+  int bookkeeping_cyc = 0;
+  int cycle_network_execution = 0;
 #endif
+
 /* MAIN SECTION
   - for loop over all the layers of the network
   - double buffering using L3
@@ -198,6 +203,14 @@ void ${prefix}network_run_cluster(void * args) {
 /* ---------------------------------- */
 /* -------- SECTION 2 BEGIN --------- */
 /* ---------------------------------- */
+
+#if defined PERF_LAYER || defined PERF_FINAL
+  // Bookkeeping cycle measurement start
+  pi_perf_stop();
+  pi_perf_reset();
+  pi_perf_start();
+#endif
+
   int weight_l_cnt = 0; // count how many layers with weights we have processed to increment the weights_L3 pointer
   for (int i = 0; i < ${len(DORY_HW_graph)}; i++) {
 /* MEMORY ALLOCATION
@@ -213,13 +226,35 @@ void ${prefix}network_run_cluster(void * args) {
     if (layer_with_weights[i] == 1)
       L2_weights = dmalloc(weights_size[i], dir);
 
+
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+
+    bookkeeping_cyc += pi_perf_read(PI_PERF_CYCLES);
+
+    pi_perf_reset();
+    pi_perf_start();
+#endif
+
     if (allocate_layer[i] == 1)
       cl_ram_read(L2_weights, L3_weights_curr, weights_size[i]);
+
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+
+    io_cyc += pi_perf_read(PI_PERF_CYCLES);
+
+    pi_perf_reset();
+    pi_perf_start();
+#endif
     % else:
     L2_weights = Weights_name[i];
     % endif
 
 #ifdef CHECKSUM
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+#endif
     % if l3_supported:
     if (L3_input_layers[i] == 1) {
       printf("Input in L3\n");
@@ -230,8 +265,15 @@ void ${prefix}network_run_cluster(void * args) {
     } else {
       printf("Switching branch, already checked activation\n");
     }
-#endif // CHECKSUM_ACTIVATIONS
-#if defined CHECKSUM || CHECKSUM_JUST_WEIGHTS
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_start();
+#endif
+#endif // CHECKSUM
+
+#if defined CHECKSUM || defined CHECKSUM_JUST_WEIGHTS
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+#endif
     % if l3_supported:
     if (allocate_layer[i] == 1) {
     % else:
@@ -241,7 +283,10 @@ void ${prefix}network_run_cluster(void * args) {
     } else {
       printf("Weights in L3\n");
     }
-#endif // CHECKSUM_WEIGHTS
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_start();
+#endif
+#endif // CHECHSUM || CHECKSUM_JUST_WEIGHTS
 
     layer_args_t largs = {
       .L3_input = (unsigned int) L3_input,
@@ -261,25 +306,32 @@ void ${prefix}network_run_cluster(void * args) {
 /*
 - Execution of the layers_pointers
 */
+
 #if defined PERF_LAYER || defined PERF_FINAL
-    // perf measurement begin
-    pi_perf_conf(1<<PI_PERF_CYCLES);
-    pi_perf_reset();
     pi_perf_stop();
+
+    bookkeeping_cyc += pi_perf_read(PI_PERF_CYCLES);
+
+    pi_perf_reset();
     pi_perf_start();
 #endif
 
     ${prefix}execute_layer_fork((void *) &largs);
 
 #if defined PERF_LAYER || defined PERF_FINAL
-    // performance measurements: end
     pi_perf_stop();
-    perf_cyc =  pi_perf_read(PI_PERF_CYCLES);
-    ${prefix}cycle_network_execution += perf_cyc;
+
+    perf_cyc = pi_perf_read(PI_PERF_CYCLES);
+    cycle_network_execution += perf_cyc;
 #endif
 
 #ifdef PERF_LAYER
     print_perf(Layers_name[i], perf_cyc, NODEs_MACS[i]);
+#endif
+
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_reset();
+    pi_perf_start();
 #endif
 
     // TODO: What error?
@@ -292,10 +344,19 @@ void ${prefix}network_run_cluster(void * args) {
     asm volatile("": : :"memory");
 
 #ifdef VERBOSE
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+#endif
     printf("Layer %s %d ended: \n", Layers_name[i], i);
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_start();
+#endif
 #endif // VERBOSE
 
 #ifdef CHECKSUM
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+#endif
     % if l3_supported:
     if (L3_output_layers[i]==1) {
       printf("Output in L3. Expected checksum: %d\n", activations_out_checksum[i][exec]);
@@ -306,6 +367,9 @@ void ${prefix}network_run_cluster(void * args) {
     % if l3_supported:
     }
     % endif
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_start();
+#endif
 #endif // CHECKSUM
 
     // Free memory
@@ -400,16 +464,37 @@ void ${prefix}network_run_cluster(void * args) {
     dir = !dir;
   }
 
+#if defined PERF_LAYER || defined PERF_FINAL
+    pi_perf_stop();
+
+    bookkeeping_cyc += pi_perf_read(PI_PERF_CYCLES);
+
+    pi_perf_reset();
+    pi_perf_start();
+#endif
+
   //memcpy(L2_output, l2_final_output, activations_out_size[${len(DORY_HW_graph)-1}]); // BUGGY!
   for (int i=0; i<activations_out_size[${len(DORY_HW_graph)-1}]; i++)
     *((uint8_t*)(l2_final_output+i)) = *((uint8_t*)(L2_output+i));
+
+#if defined PERF_LAYER || defined PERF_FINAL
+  pi_perf_stop();
+  io_cyc += pi_perf_read(PI_PERF_CYCLES);
+#endif
+
+#ifdef PERF_LAYER
+  print_perf("IO wait", io_cyc, 0 /*ops*/);
+  print_perf("Bookkeeping", bookkeeping_cyc, 0 /*ops*/);
+#endif
 
 #ifdef CHECKSUM
   checksum("final layer", L2_output, activations_out_size[${len(DORY_HW_graph)-1}], activations_out_checksum[${len(DORY_HW_graph)-1}][exec]);
 #endif
 
-#ifdef PERF_FINAL
-  print_perf("Final", ${prefix}cycle_network_execution, ${MACs});
+#ifdef PERF_LAYER || PERF_FINAL
+  cycle_network_execution += io_cyc;
+  cycle_network_execution += bookkeeping_cyc;
+  print_perf("Final", cycle_network_execution, ${MACs});
 #endif
 
 /* ---------------------------------- */

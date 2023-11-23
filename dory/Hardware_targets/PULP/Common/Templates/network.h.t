@@ -225,13 +225,13 @@ static int layer_with_weights[${len(DORY_HW_graph)}] = {\
 % endif
 % endfor
 };
-% if 'Yes' in performance:
+#ifdef PERF_LAYER
 static int NODEs_MACS[${len(DORY_HW_graph)}] = {\
 % for node in DORY_HW_graph:
 ${node.MACs}${'' if loop.last else ', '}\
 % endfor
 };
-% endif
+#endif
 #endif
 
 #endif  // __NETWORK_H__
