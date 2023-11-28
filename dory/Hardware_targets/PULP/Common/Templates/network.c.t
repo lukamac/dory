@@ -492,9 +492,8 @@ void ${prefix}network_run_cluster(void * args) {
 #endif
 
 #if defined PERF_LAYER || defined PERF_FINAL
-  cycle_network_execution += io_cyc;
-  cycle_network_execution += bookkeeping_cyc;
-  print_perf("Final", cycle_network_execution, ${MACs});
+  print_perf("Only network execution", cycle_network_execution, ${MACs});
+  print_perf("Total", cycle_network_execution + io_cyc + bookkeeping_cyc, ${MACs});
 #endif
 
 /* ---------------------------------- */
