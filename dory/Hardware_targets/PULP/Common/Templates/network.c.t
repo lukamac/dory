@@ -186,7 +186,7 @@ void ${prefix}network_run_cluster(void * args) {
 /* --------- SECTION 1 END ---------- */
 /* ---------------------------------- */
 
-#if defined PERF_LAYER || PERF_FINAL
+#if defined PERF_LAYER || defined PERF_FINAL
   pi_perf_conf(1<<PI_PERF_CYCLES);
   int perf_cyc = 0;
   int io_cyc = 0;
@@ -491,7 +491,7 @@ void ${prefix}network_run_cluster(void * args) {
   checksum("final layer", L2_output, activations_out_size[${len(DORY_HW_graph)-1}], activations_out_checksum[${len(DORY_HW_graph)-1}][exec]);
 #endif
 
-#ifdef PERF_LAYER || PERF_FINAL
+#if defined PERF_LAYER || defined PERF_FINAL
   cycle_network_execution += io_cyc;
   cycle_network_execution += bookkeeping_cyc;
   print_perf("Final", cycle_network_execution, ${MACs});
