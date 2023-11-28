@@ -89,22 +89,8 @@ void ${prefix}network_terminate(${prefix}network_t * network) {
   pi_cluster_close(&network->cluster_dev);
 }
 
-void ${prefix}execute_layer_fork(void *args) {
-  layer_args_t *layer_args = (layer_args_t *)args;
-#ifdef TARGET_CHIP_FAMILY_GAP9
-  layer_args->L1_buffer = pi_cl_l1_malloc(NULL, ${l1_buffer});
-#else
-  layer_args->L1_buffer = pmsis_l1_malloc(${l1_buffer});
-#endif
-
-  if (NULL == layer_args->L1_buffer) {
-#ifdef VERBOSE
-    printf("ERROR: Failed to allocate the L1 buffer.\n");
-#endif // VERBOSE
-    return;
-  }
-
-  switch (layer_args->layer_id)
+static inline void ${prefix}execute_layer_fork(layer_args_t *args, int layer_id) {
+  switch (layer_id)
   {
 % for i in range(len(DORY_HW_graph)):
     case ${i}:
@@ -112,12 +98,6 @@ void ${prefix}execute_layer_fork(void *args) {
       break;
 % endfor
   }
-
-#ifdef TARGET_CHIP_FAMILY_GAP9
-  pi_cl_l1_free(NULL, layer_args->L1_buffer, ${l1_buffer});
-#else
-  pmsis_l1_malloc_free(layer_args->L1_buffer, ${l1_buffer});
-#endif
 }
 
 void ${prefix}network_run_async(${prefix}network_t * network, ${prefix}network_args_t * args) {
@@ -181,6 +161,19 @@ void ${prefix}network_run_cluster(void * args) {
   L2_input = L2_input_h;
   % endif
   directional_allocator_init(l2_buffer, l2_buffer_size);
+
+#ifdef TARGET_CHIP_FAMILY_GAP9
+  void * L1_buffer = pi_cl_l1_malloc(NULL, ${l1_buffer});
+#else
+  void * L1_buffer = pmsis_l1_malloc(${l1_buffer});
+#endif
+
+  if (NULL == L1_buffer) {
+#ifdef VERBOSE
+    printf("ERROR: Failed to allocate the L1 buffer.\n");
+#endif // VERBOSE
+    return;
+  }
 
 /* ---------------------------------- */
 /* --------- SECTION 1 END ---------- */
@@ -296,11 +289,10 @@ void ${prefix}network_run_cluster(void * args) {
       .bypass = (unsigned int) bypass_activations,
       .L2_output = (unsigned int) L2_output,
       .L2_weights = (unsigned int) L2_weights,
-      .L1_buffer = 0,
+      .L1_buffer = (unsigned int) L1_buffer,
       .ram = (unsigned int) get_ram_ptr(),
       .out_mult = (unsigned int) out_mult_vector[i],
-      .out_shift = (unsigned int) out_shift_vector[i],
-      .layer_id = i
+      .out_shift = (unsigned int) out_shift_vector[i]
     };
 
 /*
@@ -316,7 +308,7 @@ void ${prefix}network_run_cluster(void * args) {
     pi_perf_start();
 #endif
 
-    ${prefix}execute_layer_fork((void *) &largs);
+    ${prefix}execute_layer_fork(&largs, i);
 
 #if defined PERF_LAYER || defined PERF_FINAL
     pi_perf_stop();
@@ -464,13 +456,19 @@ void ${prefix}network_run_cluster(void * args) {
     dir = !dir;
   }
 
+#ifdef TARGET_CHIP_FAMILY_GAP9
+  pi_cl_l1_free(NULL, L1_buffer, ${l1_buffer});
+#else
+  pmsis_l1_malloc_free(L1_buffer, ${l1_buffer});
+#endif
+
 #if defined PERF_LAYER || defined PERF_FINAL
-    pi_perf_stop();
+  pi_perf_stop();
 
-    bookkeeping_cyc += pi_perf_read(PI_PERF_CYCLES);
+  bookkeeping_cyc += pi_perf_read(PI_PERF_CYCLES);
 
-    pi_perf_reset();
-    pi_perf_start();
+  pi_perf_reset();
+  pi_perf_start();
 #endif
 
   //memcpy(L2_output, l2_final_output, activations_out_size[${len(DORY_HW_graph)-1}]); // BUGGY!

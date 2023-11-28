@@ -15,7 +15,6 @@ typedef struct {
   unsigned int ram;
   unsigned int out_mult;
   unsigned int out_shift;
-  unsigned int layer_id;
 } layer_args_t;
 
 void print_perf(const char *name, const int cycles, const int macs);

@@ -56,7 +56,6 @@ void ${prefix}network_run_cluster(void * args);
 void ${prefix}network_run_async(${prefix}network_t * network, ${prefix}network_args_t * args);
 void ${prefix}network_run_wait(${prefix}network_t * network);
 void ${prefix}network_run(${prefix}network_t * network, ${prefix}network_args_t * args);
-void ${prefix}execute_layer_fork(void * args);
 
 % if l3_supported and not single_input:
 static char * ${prefix}Input_names[${n_inputs}] = { \
